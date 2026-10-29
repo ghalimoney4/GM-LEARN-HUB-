@@ -2,66 +2,81 @@ import os
 from flask import Flask
 import threading
 import telebot
+from groq import Groq
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
+GROQ_KEY = os.environ.get("GROQ_API_KEY")
+
 bot = telebot.TeleBot(BOT_TOKEN)
+client = Groq(api_key=GROQ_KEY) if GROQ_KEY else None
 app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "GM Learn Hub Live!"
+    return "GM Learn Hub - AI Teacher Live!"
+
+SYSTEM_PROMPT = """
+Kai ne MALAMIN GM ENGLISH ARABIC ACADEMY. Sunanka GM Teacher.
+
+DOKOKINKA:
+1. Ka amsa duk tambaya kamar cikakken malami mai hikima.
+2. Ka iya koyar da: Turanci (English), Larabci (Arabic), da Python/Computer.
+3. Ka rika yin bayani a Hausa mai sauki, amma idan kana koyar da Turanci ka yi amfani da Turanci + fassarar Hausa.
+4. Ka yi bayani mai zurfi, da misalai, da karin haske.
+5. Kada ka ce "Rubuta Turanci". Kai ka fahimci nufin dalibi kai tsaye.
+6. Idan dalibi ya ce "Sannu", ka amsa da sannu. Idan ya ce "Ina son koyon Larabci", ka fara koyarwa nan take.
+7. Ka kasance mai ladabi, mai hakuri, kamar Annabi ya koyar.
+8. Koyaushe ka karfafa dalibi: "Masha Allah", "Kokari yayi kyau".
+9. Ka amsa a takaice amma mai cike da ilimi - kar a yi dogon rubutu mai gajiyawa.
+10. Idan ba ka san amsa ba, ka ce: "Wannan tambaya tana da kyau, bari mu bincika tare..."
+"""
+
+def ask_ai(user_text):
+    if not client:
+        return None
+    try:
+        chat = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": user_text}
+            ],
+            temperature=0.7,
+            max_tokens=800
+        )
+        return chat.choices[0].message.content
+    except Exception as e:
+        print(f"Groq error: {e}")
+        return None
 
 @bot.message_handler(commands=['start'])
 def start(m):
-    bot.reply_to(m, 
-"Assalamu Alaikum! Barka da zuwa GM LEARN HUB 📚\n\n"
-"Me kake so ka koya yau?\n"
-"1️⃣ Turanci (English)\n"
-"2️⃣ Larabci (Arabic)\n"
-"3️⃣ Python / Computer\n\n"
-"Rubuta kawai: 'Ina son Turanci' ko 'Ina son Larabci'")
+    bot.reply_to(m,
+"Assalamu Alaikum! Ni ne Malamin ku na GM Academy 📚🤖\n\n"
+"Yanzu na zama cikakken malami mai hankali!\n\n"
+"Ka iya tambayata KOMAI:\n"
+"• 'Koya min yadda ake gaishe a Turanci'\n"
+"• 'Menene ma'anar Shukran a Larabci?'\n"
+"• 'Yaya ake rubuta shirin Python?'\n"
+"• 'Ka yi min fassarar wannan...'\n\n"
+"Tambaya kawai kamar kana magana da mutum!")
 
 @bot.message_handler(func=lambda m: True)
 def reply(m):
-    txt = m.text.lower()
-
-    if "turanci" in txt or "english" in txt or "ingilishi" in txt:
-        bot.reply_to(m,
-"🇬🇧 TURANCI - Darasi na 1:\n\n"
-"Greetings:\n"
-"Hello = Sannu\n"
-"Good morning = Barka da safiya\n"
-"How are you? = Ina kwana?\n"
-"I'm fine = Ina lafiya\n\n"
-"Ka rubuta 'Na gane' mu wuce gaba, ko 'Larabci' don canzawa.")
-
-    elif "larabci" in txt or "arabic" in txt or "arab" in txt:
-        bot.reply_to(m,
-"🇸🇦 LARABCI - Darasi na 1:\n\n"
-"As-salamu alaikum = Aminci ya tabbata a gareku\n"
-"Wa alaikum salam = Aminci ya tabbata a gareku ma\n"
-"Kayfa haluk? = Ina lafiyarka?\n"
-"Bikhair = Lafiya lau\n\n"
-"Ka rubuta 'Na gane' mu wuce gaba.")
-
-    elif "python" in txt or "computer" in txt or "code" in txt:
-        bot.reply_to(m,
-"💻 PYTHON - Darasi na 1:\n\n"
-"print('Sannu Duniya')\n"
-"Wannan zai buga Sannu Duniya a kwamfuta.\n\n"
-"Ka rubuta 'Na gane' mu wuce gaba.")
-
-    elif "na gane" in txt or "gaba" in txt or "next" in txt:
-        bot.reply_to(m,
-"Masha Allah! 👏\n\n"
-"Darasi na 2 ya zo nan ba da jimawa ba.\n"
-"Yanzu ka zaba: Turanci, Larabci, ko Python?")
-
-    elif "sannu" in txt or "slm" in txt or "assalam" in txt or "y" == txt.strip():
-        bot.reply_to(m, "Wa alaikum salam! Me kake so ka koya? Rubuta Turanci, Larabci, ko Python.")
-
+    bot.send_chat_action(m.chat.id, 'typing')
+    ai_answer = ask_ai(m.text)
+    
+    if ai_answer:
+        bot.reply_to(m, ai_answer)
     else:
-        bot.reply_to(m, f"Tambayarka: {m.text}\n\nNa gane. Ka rubuta daya daga cikin:\n- Ina son Turanci\n- Ina son Larabci\n- Ina son Python")
+        # Fallback idan babu GROQ KEY
+        bot.reply_to(m,
+f"Tambayarka mai kyau ce: '{m.text}'\n\n"
+"Don in zama cikakken malami mai amsa komai, sai an saka GROQ_API_KEY a Render.\n"
+"Amma yanzu zan iya koya maka:\n"
+"- Rubuta: Ina son Turanci\n"
+"- Rubuta: Ina son Larabci\n"
+"- Rubuta: Ina son Python")
 
 def run_flask():
     app.run(host="0.0.0.0", port=10000)

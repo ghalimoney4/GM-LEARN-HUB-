@@ -1,5 +1,4 @@
 
 pyTelegramBotAPI
-flask
-groq
+google-generativeai
 
